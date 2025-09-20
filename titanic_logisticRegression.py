@@ -29,6 +29,12 @@ for df in [train, test]:
     if "Cabin" in df.columns:
         df.drop(columns=["Cabin"], inplace=True)
 
+# Fill TEST missing values (train already handled above)
+test["Age"]  = test["Age"].fillna(train["Age"].median())      # or test["Age"].median()
+test["Fare"] = test["Fare"].fillna(test["Fare"].median())
+test["Embarked"] = test["Embarked"].fillna(train["Embarked"].mode()[0])
+
+
 
 #convert categorical columns into numerical features by one-hot encoding
 categorical_columns = ["Sex", "Embarked", "CabinDeck"]
@@ -43,27 +49,38 @@ drop_from_features = {"PassengerId", "Name", "Ticket"}
 feature_columns = [c for c in all_feature_columns if c not in drop_from_features]
 
 #create a train/val split
-X = train[feature_columns]
+X_train = train[feature_columns]
 y = train["Survived"]
-X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+#X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
 #scaling the numerical features so that each feature has mean=0 and sd=1
 numerical_features = ["Pclass", "Age", "SibSp", "Parch", "Fare"]
 scaler = StandardScaler()
 #make copies of the datasets because we want to be able to go back to the original if something happens
 X_train_scaled = X_train.copy()
-X_val_scaled = X_val.copy()
+#X_val_scaled = X_val.copy()
+test_scaled = test.copy()
 #fit the scaler, the scaler learns the mean and sd of each feature and then applies the transform
 X_train_scaled[numerical_features] = scaler.fit_transform(X_train[numerical_features])
 #here we use the .transform only because we dont want to compute a new mean/sd from the validation set because we must apply the same scaling learned from training data to the validation data
-X_val_scaled[numerical_features] = scaler.transform(X_val[numerical_features])
+#X_val_scaled[numerical_features] = scaler.transform(X_val[numerical_features])
+test_scaled[numerical_features] = scaler.transform(test[numerical_features])
 
 #make the logistic predictions
 log_reg = LogisticRegression(max_iter=1000)
-log_reg.fit(X_train_scaled, y_train)
+log_reg.fit(X_train_scaled, y)
 
 #prediction scores
-y_pred = log_reg.predict(X_val_scaled)
-print("Accuracy", accuracy_score(y_val, y_pred))
-print("Classification report:", classification_report(y_val, y_pred))
-print("Confusion matrix: ", confusion_matrix(y_val, y_pred))
+y_pred = log_reg.predict(test_scaled[feature_columns])
+#print("Accuracy", accuracy_score(y_val, y_pred))
+#print("Classification report:", classification_report(y_val, y_pred))
+#print("Confusion matrix: ", confusion_matrix(y_val, y_pred))
+
+raw_test = pd.read_csv('./Datasets/test.csv')
+
+sumbission = pd.DataFrame({
+    "PassengerId": raw_test["PassengerId"],
+    "Survived": y_pred
+})
+
+sumbission.to_csv("sumbission_log_reg.csv", index=False)
